@@ -70,7 +70,7 @@ export function ReservationsTable({ reservations, rooms }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef(null);
 
-  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [upcomingPage, setUpcomingPage] = useState(1);  // will be used for month events pagination
   const eventsPerPage = 3; 
 
   const filteredReservations = (reservations || [])
@@ -109,6 +109,8 @@ export function ReservationsTable({ reservations, rooms }) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthEvents = events.filter((ev) => ev.start >= monthStart && ev.start <= monthEnd);
+  // Sort month events by start time (ascending) for the list
+  const monthEventsSorted = [...monthEvents].sort((a, b) => a.start - b.start);
 
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const eventsByDay = daysInMonth.map((day) => ({
@@ -116,22 +118,22 @@ export function ReservationsTable({ reservations, rooms }) {
     events: monthEvents.filter((ev) => isSameDay(ev.start, day)),
   }));
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const upcomingEvents = events
-    .filter((ev) => ev.start >= today)
-    .sort((a, b) => a.start - b.start);
+  // --- Right column data (based on selected month) ---
+  const scheduledCount = monthEventsSorted.filter((ev) => ev.status === 'Upcoming').length;
+  const ongoingCount = monthEventsSorted.filter((ev) => ev.status === 'Ongoing').length;
+  const completedCount = monthEventsSorted.filter((ev) => ev.status === 'Completed').length;
+  const cancelledCount = monthEventsSorted.filter((ev) => ev.status === 'Cancelled').length;
 
-  const totalUpcoming = upcomingEvents.length;
-  const totalUpcomingPages = Math.ceil(totalUpcoming / eventsPerPage);
-  const upcomingStart = (upcomingPage - 1) * eventsPerPage;
-  const upcomingEnd = upcomingStart + eventsPerPage;
-  const currentUpcoming = upcomingEvents.slice(upcomingStart, upcomingEnd);
+  const totalMonthEvents = monthEventsSorted.length;
+  const totalMonthPages = Math.ceil(totalMonthEvents / eventsPerPage);
+  const monthStartIndex = (upcomingPage - 1) * eventsPerPage;
+  const monthEndIndex = monthStartIndex + eventsPerPage;
+  const currentMonthEvents = monthEventsSorted.slice(monthStartIndex, monthEndIndex);
 
-  const scheduledCount = upcomingEvents.filter((ev) => ev.status === 'Upcoming').length;
-  const ongoingCount = upcomingEvents.filter((ev) => ev.status === 'Ongoing').length;
-  const completedCount = upcomingEvents.filter((ev) => ev.status === 'Completed').length;
-  const cancelledCount = upcomingEvents.filter((ev) => ev.status === 'Cancelled').length;
+  // Reset page when month changes
+  useEffect(() => {
+    setUpcomingPage(1);
+  }, [currentDate]);
 
   const handlePrevMonth = () => {
     setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -199,6 +201,7 @@ export function ReservationsTable({ reservations, rooms }) {
       </div>
 
       <div className="flex flex-wrap gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
+        {/* Filters – unchanged */}
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600 px-2">Room</label>
           <select
@@ -380,8 +383,8 @@ export function ReservationsTable({ reservations, rooms }) {
             </div>
             <div className="mt-4 pt-4 border-t border-slate-100">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Total reservations:</span>
-                <span className="font-semibold text-slate-700">{filteredReservations.length}</span>
+                <span className="text-slate-500">Total reservations in month:</span>
+                <span className="font-semibold text-slate-700">{totalMonthEvents}</span>
               </div>
             </div>
           </div>
@@ -392,12 +395,12 @@ export function ReservationsTable({ reservations, rooms }) {
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 Reservations
               </h3>
-              <span className="text-xs text-slate-500">{totalUpcoming} total</span>
+              <span className="text-xs text-slate-500">{totalMonthEvents} total</span>
             </div>
 
-            {currentUpcoming.length > 0 ? (
+            {currentMonthEvents.length > 0 ? (
               <div className="space-y-3 mb-4">
-                {currentUpcoming.map((ev) => (
+                {currentMonthEvents.map((ev) => (
                   <button
                     key={ev.id}
                     onClick={() => handleEventClick(ev)}
@@ -436,12 +439,12 @@ export function ReservationsTable({ reservations, rooms }) {
               </div>
             ) : (
               <div className="text-center py-6">
-                <p className="text-slate-400 text-sm">No upcoming reservations</p>
+                <p className="text-slate-400 text-sm">No reservations this month</p>
               </div>
             )}
 
             
-            {totalUpcomingPages > 1 && (
+            {totalMonthPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-100">
                 <button
                   onClick={() => setUpcomingPage((p) => Math.max(p - 1, 1))}
@@ -450,7 +453,7 @@ export function ReservationsTable({ reservations, rooms }) {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                {Array.from({ length: totalUpcomingPages }, (_, i) => i + 1).map((page) => (
+                {Array.from({ length: totalMonthPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     onClick={() => setUpcomingPage(page)}
@@ -464,8 +467,8 @@ export function ReservationsTable({ reservations, rooms }) {
                   </button>
                 ))}
                 <button
-                  onClick={() => setUpcomingPage((p) => Math.min(p + 1, totalUpcomingPages))}
-                  disabled={upcomingPage === totalUpcomingPages}
+                  onClick={() => setUpcomingPage((p) => Math.min(p + 1, totalMonthPages))}
+                  disabled={upcomingPage === totalMonthPages}
                   className="p-1 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="w-4 h-4" />
