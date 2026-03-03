@@ -154,11 +154,18 @@ function App() {
 
   const handleExtend = async (reservation, minutes = 15) => {
     if (!user) return
-    if (minutes <= 0 || minutes % 15 !== 0) {
+    // Allow any positive number of minutes (including 5)
+    if (minutes <= 0) {
       // eslint-disable-next-line no-alert
-      alert('Extensions must be in 15-minute increments.')
+      alert('Extension time must be positive.')
       return
     }
+
+    // Optional: if you still want to enforce 5‑minute increments, uncomment the next block
+    // if (minutes % 5 !== 0) {
+    //   alert('Extensions must be in 5‑minute increments.')
+    //   return
+    // }
 
     const previous = reservations
     const currentEnd = new Date(reservation.end_time)

@@ -38,17 +38,14 @@ export function MyReservations({
   const now = new Date()
   const roomNameById = new Map((rooms || []).map((r) => [r.id, r.name]))
 
-  // --- Filter state ---
   const [filterRoomId, setFilterRoomId] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
 
-  // --- Pagination state ---
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(5)
 
-  // Filter function
   const filteredRows = (reservations || [])
     .filter((r) => r.user_id === user.id)
     .filter((r) => {
@@ -68,7 +65,6 @@ export function MyReservations({
         new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
     )
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1)
   }, [filterRoomId, filterDateFrom, filterDateTo, filterStatus])
@@ -96,8 +92,6 @@ export function MyReservations({
     setFilterDateTo('')
     setFilterStatus('')
   }
-
-  // Unique status options based on computed status of user's reservations
   const statusOptions = [
     ...new Set(
       (reservations || [])
@@ -106,15 +100,26 @@ export function MyReservations({
     ),
   ].sort()
 
+  const handleEndEarly = (reservation) => {
+    if (window.confirm('Are you sure you want to end this reservation early?')) {
+      onEndEarly?.(reservation)
+    }
+  }
+
+  const handleExtend = (reservation, minutes) => {
+    if (window.confirm(`Are you sure you want to extend this reservation by ${minutes} minutes?`)) {
+      onExtend?.(reservation, minutes)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-base font-semibold text-slate-900">
-          My reservations
+          My Reservations
         </h1>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600 px-2 ">Room</label>
@@ -172,7 +177,6 @@ export function MyReservations({
         </button>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white">
         <table className="min-w-full text-xs">
           <thead className="bg-slate-50">
@@ -244,25 +248,25 @@ export function MyReservations({
                         {canEndEarly && (
                           <button
                             type="button"
-                            className="cursor-pointer btn-outline text-[11px] px-2 py-1"
-                            onClick={() => onEndEarly?.(r)}
+                            className="cursor-pointer bg-red-600 text-white hover:bg-red-700 text-[11px] px-2 py-1 rounded"
+                            onClick={() => handleEndEarly(r)}
                           >
-                            End early
+                            End Early
                           </button>
                         )}
                         {canExtend && (
                           <button
                             type="button"
-                            className="cursor-pointer btn-primary text-[11px] px-2 py-1"
-                            onClick={() => onExtend?.(r, 15)}
+                            className="cursor-pointer bg-blue-600 text-white hover:bg-blue-700 text-[11px] px-2 py-1 rounded"
+                            onClick={() => handleExtend(r, 5)}
                           >
-                            Extend 15m
+                            Extend 5m
                           </button>
                         )}
                         {canCancel && (
                           <button
                             type="button"
-                            className="cursor-pointer btn-outline text-[11px] px-2 py-1"
+                            className="cursor-pointer bg-red-600 text-white hover:bg-red-700 text-[11px] px-2 py-1 rounded"
                             onClick={() => onCancel?.(r)}
                           >
                             Cancel
@@ -278,7 +282,6 @@ export function MyReservations({
         </table>
       </div>
 
-      {/* Pagination controls */}
       {totalPages > 0 && (
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2 text-xs">

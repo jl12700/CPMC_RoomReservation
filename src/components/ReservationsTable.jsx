@@ -1,106 +1,203 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  isToday,
+  parseISO,
+} from 'date-fns';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/dist/style.css';
+
+import { Calendar, Clock, MapPin, User, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function computeStatus(reservation) {
-  const now = new Date()
-  const start = new Date(reservation.start_time)
-  const end = new Date(reservation.end_time)
+  const now = new Date();
+  const start = new Date(reservation.start_time);
+  const end = new Date(reservation.end_time);
 
-  if (reservation.status === 'cancelled') return 'Cancelled'
-  if (reservation.status === 'completed' || now > end) return 'Completed'
-  if (now >= start && now <= end) return 'Ongoing'
-  if (now < start) return 'Upcoming'
-  return reservation.status
+  if (reservation.status === 'cancelled') return 'Cancelled';
+  if (reservation.status === 'completed' || now > end) return 'Completed';
+  if (now >= start && now <= end) return 'Ongoing';
+  if (now < start) return 'Upcoming';
+  return reservation.status;
 }
 
 function getStatusColorClass(status) {
   switch (status) {
     case 'Cancelled':
-      return 'bg-gray-200 text-gray-800'
+      return 'bg-gray-200 text-gray-800 border-gray-300';
     case 'Completed':
-      return 'bg-green-100 text-green-800'
+      return 'bg-green-100 text-green-800 border-green-300';
     case 'Ongoing':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-blue-100 text-blue-800 border-blue-300';
     case 'Upcoming':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-yellow-100 text-yellow-800 border-yellow-300';
     default:
-      return 'bg-slate-100 text-slate-700'
+      return 'bg-slate-100 text-slate-700 border-slate-300';
+  }
+}
+
+function getStatusBadgeColor(status) {
+  switch (status) {
+    case 'Cancelled':
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    case 'Completed':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'Ongoing':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'Upcoming':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 }
 
 export function ReservationsTable({ reservations, rooms }) {
-  const roomNameById = new Map((rooms || []).map((r) => [r.id, r.name]))
+  const roomNameById = new Map((rooms || []).map((r) => [r.id, r.name]));
 
-  // --- Filter state ---
-  const [filterRoomId, setFilterRoomId] = useState('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
+  const [filterRoomId, setFilterRoomId] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
-  // --- Pagination state ---
-  const [page, setPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(5)
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedReservation, setSelectedReservation] = useState(null);
+  const [selectedDayEvents, setSelectedDayEvents] = useState(null); 
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
 
-  // Filter function
-  const filteredRows = (reservations || [])
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const eventsPerPage = 3; 
+
+  const filteredReservations = (reservations || [])
     .filter((r) => {
-      if (filterRoomId && r.room_id !== filterRoomId) return false
-      const startDate = new Date(r.start_time)
-      const dateStr = startDate.toISOString().split('T')[0]
-      if (filterDateFrom && dateStr < filterDateFrom) return false
-      if (filterDateTo && dateStr > filterDateTo) return false
+      if (filterRoomId && r.room_id !== filterRoomId) return false;
+      const startDate = new Date(r.start_time);
+      const dateStr = startDate.toISOString().split('T')[0];
+      if (filterDateFrom && dateStr < filterDateFrom) return false;
+      if (filterDateTo && dateStr > filterDateTo) return false;
       if (filterStatus) {
-        const status = computeStatus(r)
-        if (status !== filterStatus) return false
+        const status = computeStatus(r);
+        if (status !== filterStatus) return false;
       }
-      return true
+      return true;
     })
-    .sort(
-      (a, b) =>
-        new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
-    )
+    .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
   useEffect(() => {
-    setPage(1)
-  }, [filterRoomId, filterDateFrom, filterDateTo, filterStatus])
+    setUpcomingPage(1);
+  }, [filterRoomId, filterDateFrom, filterDateTo, filterStatus]);
 
-  const totalRows = filteredRows.length
-  const totalPages = Math.ceil(totalRows / rowsPerPage)
+  const reservationToEvent = (r) => ({
+    id: r.id,
+    title: r.purpose || 'No purpose',
+    room: roomNameById.get(r.room_id) ?? 'Unknown',
+    room_id: r.room_id,
+    start: parseISO(r.start_time),
+    end: parseISO(r.end_time),
+    status: computeStatus(r),
+    reserved_by: r.reserved_by,
+    original: r,
+  });
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages || 1)
-    }
-  }, [totalPages, page])
+  const events = filteredReservations.map(reservationToEvent);
 
-  const startIndex = (page - 1) * rowsPerPage
-  const endIndex = startIndex + rowsPerPage
-  const paginatedRows = filteredRows.slice(startIndex, endIndex)
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const monthEvents = events.filter((ev) => ev.start >= monthStart && ev.start <= monthEnd);
 
-  const handlePageChange = (newPage) => {
-    setPage(Math.min(Math.max(newPage, 1), totalPages))
-  }
+  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const eventsByDay = daysInMonth.map((day) => ({
+    date: day,
+    events: monthEvents.filter((ev) => isSameDay(ev.start, day)),
+  }));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcomingEvents = events
+    .filter((ev) => ev.start >= today)
+    .sort((a, b) => a.start - b.start);
+
+  const totalUpcoming = upcomingEvents.length;
+  const totalUpcomingPages = Math.ceil(totalUpcoming / eventsPerPage);
+  const upcomingStart = (upcomingPage - 1) * eventsPerPage;
+  const upcomingEnd = upcomingStart + eventsPerPage;
+  const currentUpcoming = upcomingEvents.slice(upcomingStart, upcomingEnd);
+
+  const scheduledCount = upcomingEvents.filter((ev) => ev.status === 'Upcoming').length;
+  const ongoingCount = upcomingEvents.filter((ev) => ev.status === 'Ongoing').length;
+  const completedCount = upcomingEvents.filter((ev) => ev.status === 'Completed').length;
+  const cancelledCount = upcomingEvents.filter((ev) => ev.status === 'Cancelled').length;
+
+  const handlePrevMonth = () => {
+    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+    setPickerOpen(false);
+  };
+
+  const handleMonthSelect = (month) => {
+    setCurrentDate(month);
+    setPickerOpen(false);
+  };
+
+  const handleEventClick = (event) => {
+    setSelectedReservation(event.original);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedReservation(null);
+  };
+
+  const handleShowMoreEvents = (day, events) => {
+    setSelectedDayEvents({ date: day, events });
+  };
+
+  const handleEventClickFromDay = (event) => {
+    setSelectedDayEvents(null);
+    setSelectedReservation(event.original);
+  };
+
+  const handleCloseDayModal = () => {
+    setSelectedDayEvents(null);
+  };
 
   const clearFilters = () => {
-    setFilterRoomId('')
-    setFilterDateFrom('')
-    setFilterDateTo('')
-    setFilterStatus('')
-  }
+    setFilterRoomId('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterStatus('');
+  };
 
-  // Unique status options based on computed status of all reservations
-  const statusOptions = [
-    ...new Set((reservations || []).map((r) => computeStatus(r))),
-  ].sort()
+  const statusOptions = [...new Set((reservations || []).map((r) => computeStatus(r)))].sort();
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setPickerOpen(false);
+      }
+    };
+    if (pickerOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [pickerOpen]);
 
   return (
     <div className="flex flex-col gap-4">
+      
       <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold text-slate-900">
-          All reservations
-        </h1>
+        <h1 className="text-base font-semibold text-slate-900">Reservations Calendar</h1>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600 px-2">Room</label>
@@ -150,123 +247,403 @@ export function ReservationsTable({ reservations, rooms }) {
             ))}
           </select>
         </div>
-        <button
-          onClick={clearFilters}
-          className=" cursor-pointer btn-outline text-xs px-3 py-1.5"
-        >
+        <button onClick={clearFilters} className="cursor-pointer btn-outline text-xs px-3 py-1.5">
           Clear filters
         </button>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white">
-        <table className="min-w-full text-xs">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Room</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Date</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Start</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">End</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Purpose</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Reserved by</th>
-              <th className="px-3 py-2 text-left font-medium text-slate-600">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedRows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-4 text-center text-slate-500">
-                  No reservations match your filters.
-                </td>
-              </tr>
-            ) : (
-              paginatedRows.map((r) => {
-                const start = new Date(r.start_time)
-                const end = new Date(r.end_time)
-                const roomName = roomNameById.get(r.room_id) ?? 'Unknown'
-                const statusLabel = computeStatus(r)
-                const statusColorClass = getStatusColorClass(statusLabel)
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrevMonth}
+                className="p-1 rounded hover:bg-slate-200 transition"
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleToday}
+                className="px-3 py-1 text-xs font-semibold border border-slate-300 rounded hover:bg-slate-100"
+              >
+                Today
+              </button>
+              <button
+                onClick={handleNextMonth}
+                className="p-1 rounded hover:bg-slate-200 transition"
+                aria-label="Next month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="relative" ref={pickerRef}>
+              <button
+                onClick={() => setPickerOpen(!pickerOpen)}
+                className="inline-flex items-center gap-2 px-3 py-1 border border-slate-300 rounded bg-white text-sm font-medium hover:bg-slate-50"
+              >
+                {format(currentDate, 'MMMM yyyy')}
+                <span className="text-slate-400">▾</span>
+              </button>
+              {pickerOpen && (
+                <div className="absolute top-8 right-0 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-30">
+                  <DayPicker
+                    mode="single"
+                    captionLayout="dropdown"
+                    month={currentDate}
+                    onMonthChange={handleMonthSelect}
+                    className="text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
-                return (
-                  <tr key={r.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 text-slate-800">{roomName}</td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {start.toLocaleDateString()}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {start.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {end.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700 max-w-xs truncate">
-                      {r.purpose}
-                    </td>
-                    <td className="px-3 py-2">{r.reserved_by}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColorClass}`}
+          
+          <div className="grid grid-cols-7 text-center text-xs font-medium text-slate-500 py-2 border-b border-slate-100">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+
+          
+          <div className="grid grid-cols-7 text-sm">
+            {daysInMonth.map((day, idx) => {
+              const dayEvents = eventsByDay.find((d) => isSameDay(d.date, day))?.events || [];
+              const isCurrentMonth = isSameMonth(day, currentDate);
+              const isTodayFlag = isToday(day);
+
+              return (
+                <div
+                  key={idx}
+                  className={`min-h-[80px] p-1 border-b border-r border-slate-100 ${
+                    !isCurrentMonth ? 'bg-slate-50 text-slate-400' : ''
+                  } ${isTodayFlag ? 'bg-blue-50' : ''}`}
+                >
+                  <div className={`text-right pr-1 text-xs ${isTodayFlag ? 'font-bold text-blue-600' : ''}`}>
+                    {format(day, 'd')}
+                  </div>
+                  <div className="space-y-1 mt-1">
+                    {dayEvents.slice(0, 2).map((ev) => (
+                      <button
+                        key={ev.id}
+                        onClick={() => handleEventClick(ev)}
+                        className={`w-full text-left text-[10px] px-1 py-0.5 rounded truncate border ${getStatusColorClass(
+                          ev.status
+                        )} hover:opacity-80 transition`}
                       >
-                        {statusLabel}
+                        {ev.room}: {ev.title}
+                      </button>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <button
+                        onClick={() => handleShowMoreEvents(day, dayEvents)}
+                        className="text-[9px] text-blue-600 hover:underline pl-1 focus:outline-none"
+                      >
+                        +{dayEvents.length - 2} more
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        
+        <div className="space-y-6">
+          
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+              Status Overview
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-yellow-50 rounded-lg text-center border border-yellow-100">
+                <span className="block text-2xl font-bold text-yellow-600">{scheduledCount}</span>
+                <span className="text-xs text-yellow-600 font-medium">Upcoming</span>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg text-center border border-blue-100">
+                <span className="block text-2xl font-bold text-blue-600">{ongoingCount}</span>
+                <span className="text-xs text-blue-600 font-medium">Ongoing</span>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg text-center border border-green-100">
+                <span className="block text-2xl font-bold text-green-600">{completedCount}</span>
+                <span className="text-xs text-green-600 font-medium">Completed</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg text-center border border-gray-100">
+                <span className="block text-2xl font-bold text-gray-600">{cancelledCount}</span>
+                <span className="text-xs text-gray-600 font-medium">Cancelled</span>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Total reservations:</span>
+                <span className="font-semibold text-slate-700">{filteredReservations.length}</span>
+              </div>
+            </div>
+          </div>
+
+          
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Reservations
+              </h3>
+              <span className="text-xs text-slate-500">{totalUpcoming} total</span>
+            </div>
+
+            {currentUpcoming.length > 0 ? (
+              <div className="space-y-3 mb-4">
+                {currentUpcoming.map((ev) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => handleEventClick(ev)}
+                    className="w-full text-left p-3 border rounded-lg hover:bg-slate-50 transition"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <h4 className="font-semibold text-sm truncate">{ev.title}</h4>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusBadgeColor(
+                          ev.status
+                        )}`}
+                      >
+                        {ev.status}
                       </span>
-                    </td>
-                  </tr>
-                )
-              })
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500">{format(ev.start, 'MMM d, yyyy')}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500">
+                        {format(ev.start, 'h:mm a')} – {format(ev.end, 'h:mm a')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500 truncate">{ev.room}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <User className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500 truncate">Reserved by: {ev.reserved_by}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-slate-400 text-sm">No upcoming reservations</p>
+              </div>
             )}
-          </tbody>
-        </table>
+
+            
+            {totalUpcomingPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => setUpcomingPage((p) => Math.max(p - 1, 1))}
+                  disabled={upcomingPage === 1}
+                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: totalUpcomingPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setUpcomingPage(page)}
+                    className={`w-8 h-8 text-sm rounded-md ${
+                      upcomingPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setUpcomingPage((p) => Math.min(p + 1, totalUpcomingPages))}
+                  disabled={upcomingPage === totalUpcomingPages}
+                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Pagination controls */}
-      {totalPages > 0 && (
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-600">Rows per page:</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => {
-                setRowsPerPage(Number(e.target.value))
-                setPage(1)
-              }}
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
-            >
-              {[5, 10, 20, 50].map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-600">
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => handlePageChange(page - 1)}
-                disabled={page === 1}
-                className="px-2 py-1 border border-slate-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => handlePageChange(page + 1)}
-                disabled={page === totalPages}
-                className="px-2 py-1 border border-slate-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
-              >
-                Next
-              </button>
+      
+      {selectedReservation && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full border border-slate-200 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+            
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(
+                      computeStatus(selectedReservation)
+                    )}`}
+                  >
+                    {computeStatus(selectedReservation)}
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-900 mt-2 pr-4">
+                    {selectedReservation.purpose || 'No purpose'}
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Room: {roomNameById.get(selectedReservation.room_id) ?? 'Unknown'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              
+              <div className="space-y-4 mt-4">
+                <div className="flex items-start">
+                  <Calendar className="w-5 h-5 text-blue-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">Date</p>
+                    <p className="text-slate-900">
+                      {format(parseISO(selectedReservation.start_time), 'EEEE, MMMM d, yyyy')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Clock className="w-5 h-5 text-green-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">Time</p>
+                    <p className="text-slate-900">
+                      {format(parseISO(selectedReservation.start_time), 'h:mm a')} –{' '}
+                      {format(parseISO(selectedReservation.end_time), 'h:mm a')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <User className="w-5 h-5 text-orange-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">Reserved by</p>
+                    <p className="text-slate-900">{selectedReservation.reserved_by}</p>
+                  </div>
+                </div>
+              </div>
+
+              
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <button
+                  onClick={handleCloseModal}
+                  className="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      
+      {selectedDayEvents && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+          onClick={handleCloseDayModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full border border-slate-200 animate-scale-in max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            
+            <div className="p-6 pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {format(selectedDayEvents.date, 'EEEE, MMMM d, yyyy')}
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {selectedDayEvents.events.length} reservation(s)
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseDayModal}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            
+            <div className="overflow-y-auto flex-1 px-6 pb-6">
+              <div className="space-y-2">
+                {selectedDayEvents.events.map((ev) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => handleEventClickFromDay(ev)}
+                    className="w-full text-left p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-sm text-slate-900">{ev.title}</span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusBadgeColor(
+                          ev.status
+                        )}`}
+                      >
+                        {ev.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500">
+                        {format(ev.start, 'h:mm a')} – {format(ev.end, 'h:mm a')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500">{ev.room}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <User className="w-3 h-3 text-slate-400" />
+                      <p className="text-xs text-slate-500">Reserved by: {ev.reserved_by}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scale-in {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out;
+        }
+        .animate-scale-in {
+          animation: scale-in 0.2s ease-out;
+        }
+      `}</style>
     </div>
-  )
+  );
 }

@@ -1,7 +1,7 @@
 // Topbar.jsx
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { Calendar, LogOut, User } from 'lucide-react'
+import { Calendar, LogOut } from 'lucide-react'
 
 export function Topbar() {
   const [now, setNow] = useState(new Date())
@@ -9,13 +9,13 @@ export function Topbar() {
   const dropdownRef = useRef(null)
   const { user, signOut } = useAuth()
 
-  // Live clock
+  
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  // Click outside to close dropdown
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -26,7 +26,7 @@ export function Topbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Get initials from email
+ 
   const getInitials = () => {
     if (!user?.email) return 'U'
     const localPart = user.email.split('@')[0]
@@ -47,9 +47,22 @@ export function Topbar() {
     }
   }
 
+  const formattedDate = now.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+
+  const formattedTime = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+
   return (
     <header className="sticky top-0 z-10 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-      {/* Left side – date/time pill */}
+     
       <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
         <div className="p-1.5 bg-blue-100 rounded-md">
           <Calendar className="w-4 h-4 text-blue-600" />
@@ -57,12 +70,11 @@ export function Topbar() {
         <div className="flex flex-col">
           <span className="text-xs font-medium text-blue-600">Today</span>
           <span className="text-xs font-semibold text-gray-800">
-            {now.toLocaleDateString()} • {now.toLocaleTimeString()}
+            {formattedDate} • {formattedTime}
           </span>
         </div>
       </div>
 
-      {/* Right side – user dropdown */}
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -93,15 +105,9 @@ export function Topbar() {
           </svg>
         </button>
 
-        {/* Dropdown menu */}
+
         {dropdownOpen && (
           <div className="cursor-pointer absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-1 animate-fade-in z-50">
-            {/* Optional: add a profile link if you want */}
-            {/* <button className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-3">
-              <User className="w-4 h-4" />
-              <span>Profile</span>
-            </button> */}
-
             <button
               onClick={handleLogout}
               className="cursor-pointer w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
@@ -113,7 +119,6 @@ export function Topbar() {
         )}
       </div>
 
-      {/* Fade-in animation */}
       <style>{`
         @keyframes fade-in {
           from {

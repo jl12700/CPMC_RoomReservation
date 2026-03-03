@@ -1,4 +1,3 @@
-// Sidebar.jsx (updated styling, same structure)
 import { useState } from 'react'
 import {
   CalendarClock,
@@ -17,12 +16,12 @@ export function Sidebar({ activeView, onChangeView }) {
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      {/* Header – exactly as before, but with gradient icon & colored title */}
+    
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-200">
         {!collapsed && (
           <div className="flex  items-center gap-3">
             <span className="text-xl font-bold text-slate-800 tracking-tight">
-              Room <span className=" text-blue-600">Reservation</span>
+              CPMC <span className=" text-blue-600">Rooms</span>
             </span>
           </div>
         )}
@@ -40,7 +39,7 @@ export function Sidebar({ activeView, onChangeView }) {
         </button>
       </div>
 
-      {/* Navigation – with reference styling (active/hover) */}
+      
       <div className="flex-1 overflow-auto px-4 py-4">
         <nav className="space-y-1 text-sm">
           <button
@@ -77,7 +76,7 @@ export function Sidebar({ activeView, onChangeView }) {
             }`}
           >
             <ListChecks className="h-5 w-5 opacity-90 group-hover:opacity-100" />
-            {!collapsed && <span>View reservations</span>}
+            {!collapsed && <span>View all reservations</span>}
           </button>
         </nav>
       </div>
