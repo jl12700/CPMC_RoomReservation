@@ -201,13 +201,13 @@ export function ReservationsTable({ reservations, rooms }) {
       </div>
 
       <div className="flex flex-wrap gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
-        {/* Filters – unchanged */}
-        <div className="space-y-1">
+        {/* Filters */}
+        <div className="space-y-1 flex-1 min-w-[120px]">
           <label className="text-xs font-medium text-slate-600 px-2">Room</label>
           <select
             value={filterRoomId}
             onChange={(e) => setFilterRoomId(e.target.value)}
-            className="cursor-pointer border border-slate-300 rounded px-2 py-1 text-xs w-32"
+            className="cursor-pointer border border-slate-300 rounded px-2 py-1.5 text-xs w-full"
           >
             <option value="">All rooms</option>
             {rooms.map((room) => (
@@ -217,30 +217,30 @@ export function ReservationsTable({ reservations, rooms }) {
             ))}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 min-w-[120px]">
           <label className="text-xs font-medium text-slate-600 px-2">From date</label>
           <input
             type="date"
             value={filterDateFrom}
             onChange={(e) => setFilterDateFrom(e.target.value)}
-            className="border border-slate-300 rounded px-2 py-1 text-xs w-36"
+            className="border border-slate-300 rounded px-2 py-1.5 text-xs w-full"
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 min-w-[120px]">
           <label className="text-xs font-medium text-slate-600 px-2">To date</label>
           <input
             type="date"
             value={filterDateTo}
             onChange={(e) => setFilterDateTo(e.target.value)}
-            className="border border-slate-300 rounded px-2 py-1 text-xs w-36"
+            className="border border-slate-300 rounded px-2 py-1.5 text-xs w-full"
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 min-w-[100px]">
           <label className="text-xs font-medium text-slate-600 px-2">Status</label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-slate-300 rounded px-2 py-1 text-xs w-28"
+            className="border border-slate-300 rounded px-2 py-1.5 text-xs w-full"
           >
             <option value="">All</option>
             {statusOptions.map((status) => (
@@ -250,7 +250,7 @@ export function ReservationsTable({ reservations, rooms }) {
             ))}
           </select>
         </div>
-        <button onClick={clearFilters} className="cursor-pointer btn-outline text-xs px-3 py-1.5">
+        <button onClick={clearFilters} className="cursor-pointer btn-outline text-xs px-3 py-1.5 self-end">
           Clear filters
         </button>
       </div>
@@ -291,8 +291,8 @@ export function ReservationsTable({ reservations, rooms }) {
                 {format(currentDate, 'MMMM yyyy')}
                 <span className="text-slate-400">▾</span>
               </button>
-              {pickerOpen && (
-                <div className="absolute top-8 right-0 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-30">
+          {pickerOpen && (
+                <div className="absolute top-8 right-0 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-30 max-w-[90vw]">
                   <DayPicker
                     mode="single"
                     captionLayout="dropdown"
@@ -306,7 +306,7 @@ export function ReservationsTable({ reservations, rooms }) {
           </div>
 
           
-          <div className="grid grid-cols-7 text-center text-xs font-medium text-slate-500 py-2 border-b border-slate-100">
+          <div className="grid grid-cols-7 text-center text-[10px] sm:text-xs font-medium text-slate-500 py-2 border-b border-slate-100">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
               <div key={d}>{d}</div>
             ))}
@@ -322,7 +322,7 @@ export function ReservationsTable({ reservations, rooms }) {
               return (
                 <div
                   key={idx}
-                  className={`min-h-[80px] p-1 border-b border-r border-slate-100 ${
+                  className={`min-h-[48px] sm:min-h-[80px] p-0.5 sm:p-1 border-b border-r border-slate-100 ${
                     !isCurrentMonth ? 'bg-slate-50 text-slate-400' : ''
                   } ${isTodayFlag ? 'bg-blue-50' : ''}`}
                 >

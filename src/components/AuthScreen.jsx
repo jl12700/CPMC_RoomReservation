@@ -36,8 +36,8 @@ export function AuthScreen() {
   }
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-slate-50 text-slate-900">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-lg p-8 space-y-6">
+    <div className="h-screen w-screen flex items-center justify-center bg-slate-50 text-slate-900 px-4">
+      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-lg p-6 sm:p-8 space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             CPMC Rooms

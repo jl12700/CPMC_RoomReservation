@@ -15,6 +15,7 @@ function App() {
   const [rooms, setRooms] = useState([])
   const [reservations, setReservations] = useState([])
   const [activeView, setActiveView] = useState('reserve') // 'reserve' | 'my-reservations' | 'reservations'
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // initial load (after auth known)
   useEffect(() => {
@@ -279,14 +280,16 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen flex bg-slate-50 text-slate-900">
+    <div className="h-screen w-screen flex bg-slate-50 text-slate-900 overflow-hidden">
       <Sidebar
         activeView={activeView}
         onChangeView={setActiveView}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
       />
-      <div className="flex-1 flex flex-col">
-        <Topbar />
-        <main className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 flex flex-col min-w-0">
+        <Topbar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+        <main className="flex-1 overflow-auto px-3 py-3 md:px-6 md:py-4">
           {activeView === 'reserve' && (
             <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
               <div className="w-full max-w-xl">
