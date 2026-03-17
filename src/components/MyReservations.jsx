@@ -213,7 +213,7 @@ export function MyReservations({
                 const canCancel =
                   (r.status === 'pending' || r.status === 'active') && isFuture
                 const canEndEarly = r.status === 'active' && isOngoing
-                const canExtend = r.status === 'active'
+                const canExtend = r.status === 'active' && (isOngoing || isFuture)
 
                 return (
                   <tr key={r.id} className="border-t border-slate-100">

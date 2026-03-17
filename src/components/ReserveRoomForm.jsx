@@ -11,6 +11,15 @@ function combineDateAndTime(dateStr, timeStr) {
   return d.toISOString()
 }
 
+function formatTime12h(timeStr) {
+  const [hourStr, minuteStr] = timeStr.split(':')
+  const hour = parseInt(hourStr, 10)
+  const minute = minuteStr
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12 = hour % 12 || 12
+  return `${h12}:${minute} ${ampm}`
+}
+
 export function ReserveRoomForm({ rooms, onReservationCreated }) {
   const { user } = useAuth()
   const [roomId, setRoomId] = useState('')
@@ -247,8 +256,8 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
             <div className="space-y-2 text-sm">
               <p><span className="font-medium text-slate-700">Room:</span> {selectedRoom?.name}</p>
               <p><span className="font-medium text-slate-700">Date:</span> {new Date(pendingData.date).toLocaleDateString()}</p>
-              <p><span className="font-medium text-slate-700">Start time:</span> {pendingData.startTime}</p>
-              <p><span className="font-medium text-slate-700">End time:</span> {pendingData.endTime}</p>
+              <p><span className="font-medium text-slate-700">Start time:</span> {formatTime12h(pendingData.startTime)}</p>
+              <p><span className="font-medium text-slate-700">End time:</span> {formatTime12h(pendingData.endTime)}</p>
               <p><span className="font-medium text-slate-700">Purpose:</span> {pendingData.purpose}</p>
               <p><span className="font-medium text-slate-700">Reserved by:</span> {pendingData.reservedBy}</p>
             </div>
