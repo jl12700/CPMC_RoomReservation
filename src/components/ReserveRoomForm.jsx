@@ -20,6 +20,23 @@ function formatTime12h(timeStr) {
   return `${h12}:${minute} ${ampm}`
 }
 
+function getTodayString() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Returns "HH:MM" of current time + a small buffer (5 min) to avoid razor-thin windows
+function getMinTimeString() {
+  const now = new Date()
+  now.setMinutes(now.getMinutes() + 5)
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 export function ReserveRoomForm({ rooms, onReservationCreated }) {
   const { user } = useAuth()
   const [roomId, setRoomId] = useState('')
@@ -32,29 +49,68 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
-  
   const [showModal, setShowModal] = useState(false)
   const [pendingData, setPendingData] = useState(null)
+
+  const today = getTodayString()
+  const isToday = date === today
 
   const handleReview = (e) => {
     e.preventDefault()
     setError('')
 
-    
     if (!roomId || !date || !startTime || !endTime || !purpose || !reservedBy) {
       setError('All fields are required.')
       return
     }
 
+    // Prevent past dates
+    if (date < today) {
+      setError('You cannot make a reservation for a past date.')
+      return
+    }
+
+    const now = new Date()
     const startIso = combineDateAndTime(date, startTime)
     const endIso = combineDateAndTime(date, endTime)
 
+    // Prevent past start time on today
+    if (isToday && new Date(startIso) <= now) {
+      setError('Start time must be at least a few minutes from now.')
+      return
+    }
+
+    // End must be after start
     if (new Date(endIso) <= new Date(startIso)) {
       setError('End time must be after start time.')
       return
     }
 
-  
+    // Minimum duration: 15 minutes
+    const durationMs = new Date(endIso) - new Date(startIso)
+    if (durationMs < 15 * 60 * 1000) {
+      setError('Reservation must be at least 15 minutes long.')
+      return
+    }
+
+    // Maximum duration: 8 hours
+    if (durationMs > 8 * 60 * 60 * 1000) {
+      setError('Reservation cannot exceed 8 hours.')
+      return
+    }
+
+    // Purpose length guard
+    if (purpose.trim().length < 5) {
+      setError('Please provide a more descriptive purpose (at least 5 characters).')
+      return
+    }
+
+    // Reserved by: no numbers or special characters
+    if (!/^[a-zA-Z\s.'-]+$/.test(reservedBy.trim())) {
+      setError('Reserved by should contain a valid name.')
+      return
+    }
+
     setPendingData({
       roomId,
       date,
@@ -74,7 +130,6 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
     setError('')
 
     try {
-
       const { data: overlapping, error: checkError } = await supabase
         .from('reservations')
         .select('id')
@@ -147,6 +202,13 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
     setPendingData(null)
   }
 
+  // Reset times when date changes to avoid stale past-time values
+  const handleDateChange = (e) => {
+    setDate(e.target.value)
+    setStartTime('')
+    setEndTime('')
+  }
+
   const selectedRoom = rooms.find((r) => r.id === pendingData?.roomId)
 
   return (
@@ -175,7 +237,8 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
             type="date"
             className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            min={today}
+            onChange={handleDateChange}
             required
           />
         </div>
@@ -187,7 +250,14 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
               type="time"
               className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              min={isToday ? getMinTimeString() : undefined}
+              onChange={(e) => {
+                setStartTime(e.target.value)
+                // Clear end time if it's now invalid
+                if (endTime && e.target.value >= endTime) {
+                  setEndTime('')
+                }
+              }}
               required
             />
           </div>
@@ -197,6 +267,7 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
               type="time"
               className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               value={endTime}
+              min={startTime || (isToday ? getMinTimeString() : undefined)}
               onChange={(e) => setEndTime(e.target.value)}
               required
             />
@@ -247,7 +318,7 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
         </button>
       </form>
 
-{showModal && pendingData && (
+      {showModal && pendingData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
