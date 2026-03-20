@@ -20,6 +20,15 @@ function formatTime12h(timeStr) {
   return `${h12}:${minute} ${ampm}`
 }
 
+function formatIsoTo12h(isoString) {
+  const date = new Date(isoString)
+  const hours = date.getHours()
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  const h12 = hours % 12 || 12
+  return `${h12}:${minutes} ${ampm}`
+}
+
 function getTodayString() {
   const now = new Date()
   const year = now.getFullYear()
@@ -28,14 +37,14 @@ function getTodayString() {
   return `${year}-${month}-${day}`
 }
 
-// Returns "HH:MM" of current time + a small buffer (5 min) to avoid razor-thin windows
-function getMinTimeString() {
+function getCurrentTimeString() {
   const now = new Date()
-  now.setMinutes(now.getMinutes() + 5)
   const hours = String(now.getHours()).padStart(2, '0')
   const minutes = String(now.getMinutes()).padStart(2, '0')
   return `${hours}:${minutes}`
 }
+
+const GAP_MINUTES = 1
 
 export function ReserveRoomForm({ rooms, onReservationCreated }) {
   const { user } = useAuth()
@@ -74,34 +83,19 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
     const startIso = combineDateAndTime(date, startTime)
     const endIso = combineDateAndTime(date, endTime)
 
-    // Prevent past start time on today
-    if (isToday && new Date(startIso) <= now) {
-      setError('Start time must be at least a few minutes from now.')
-      return
+    // Prevent past start time on today (allows current minute by flooring seconds)
+    if (isToday) {
+      const nowFloored = new Date(now)
+      nowFloored.setSeconds(0, 0)
+      if (new Date(startIso) < nowFloored) {
+        setError('Start time must be from the current time onwards.')
+        return
+      }
     }
 
     // End must be after start
     if (new Date(endIso) <= new Date(startIso)) {
       setError('End time must be after start time.')
-      return
-    }
-
-    // Minimum duration: 15 minutes
-    const durationMs = new Date(endIso) - new Date(startIso)
-    if (durationMs < 15 * 60 * 1000) {
-      setError('Reservation must be at least 15 minutes long.')
-      return
-    }
-
-    // Maximum duration: 8 hours
-    if (durationMs > 8 * 60 * 60 * 1000) {
-      setError('Reservation cannot exceed 8 hours.')
-      return
-    }
-
-    // Purpose length guard
-    if (purpose.trim().length < 5) {
-      setError('Please provide a more descriptive purpose (at least 5 characters).')
       return
     }
 
@@ -130,12 +124,24 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
     setError('')
 
     try {
+      // Fetch overlapping reservations including the 1-minute gap
+      // A conflict exists if an existing reservation's end time + 1 min > new start time
+      // and existing start time < new end time + 1 min
+      const gapMs = GAP_MINUTES * 60 * 1000
+
+      const newStartMs = new Date(pendingData.startIso).getTime()
+      const newEndMs = new Date(pendingData.endIso).getTime()
+
+      // Adjusted times for gap check
+      const newStartWithGap = new Date(newStartMs - gapMs).toISOString()
+      const newEndWithGap = new Date(newEndMs + gapMs).toISOString()
+
       const { data: overlapping, error: checkError } = await supabase
         .from('reservations')
-        .select('id')
+        .select('id, end_time')
         .eq('room_id', pendingData.roomId)
-        .lt('start_time', pendingData.endIso)
-        .gt('end_time', pendingData.startIso)
+        .lt('start_time', newEndWithGap)
+        .gt('end_time', newStartWithGap)
         .limit(1)
 
       if (checkError) {
@@ -145,7 +151,15 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
       }
 
       if (overlapping && overlapping.length > 0) {
-        setError('This time slot is already taken. Please choose another time.')
+        // Get the conflicting reservation's end time
+        const conflictEndIso = overlapping[0].end_time
+        const nextAvailableIso = new Date(
+          new Date(conflictEndIso).getTime() + gapMs
+        ).toISOString()
+
+        setError(
+          `This room is currently reserved until ${formatIsoTo12h(conflictEndIso)}. The next available time is ${formatIsoTo12h(nextAvailableIso)}.`
+        )
         setSubmitting(false)
         return
       }
@@ -202,7 +216,6 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
     setPendingData(null)
   }
 
-  // Reset times when date changes to avoid stale past-time values
   const handleDateChange = (e) => {
     setDate(e.target.value)
     setStartTime('')
@@ -250,10 +263,9 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
               type="time"
               className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               value={startTime}
-              min={isToday ? getMinTimeString() : undefined}
+              min={isToday ? getCurrentTimeString() : undefined}
               onChange={(e) => {
                 setStartTime(e.target.value)
-                // Clear end time if it's now invalid
                 if (endTime && e.target.value >= endTime) {
                   setEndTime('')
                 }
@@ -267,7 +279,7 @@ export function ReserveRoomForm({ rooms, onReservationCreated }) {
               type="time"
               className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               value={endTime}
-              min={startTime || (isToday ? getMinTimeString() : undefined)}
+              min={startTime || (isToday ? getCurrentTimeString() : undefined)}
               onChange={(e) => setEndTime(e.target.value)}
               required
             />
